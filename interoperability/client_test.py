@@ -419,6 +419,74 @@ class Test(unittest.TestCase):
       print("unsubscribe tests", "succeeded" if succeeded else "failed")
       return succeeded
 
+    def test_sys_messages(self):
+      def is_same(a, b):
+        arr1 = a.split(b'\\u{0000}')
+        arr2 = b.split(b'\\u{0000}')
+
+        arr1.sort()
+        arr2.sort()
+
+        self.assertEqual(arr1, arr2)
+
+      succeeded = True
+      try:
+        # message queueing for offline clients
+        callback.clear()
+
+        # shows connected clients and updates
+        aclient.connect(host=host, port=port, cleansession=True)
+        bclient.connect(host=host, port=port, cleansession=True)
+
+        aclient.subscribe(["$sys/connected"], [1])
+        time.sleep(.5)
+        self.assertEqual(len(callback.messages), 1)
+        is_same(callback.messages[0][1], b'myclientid\\u{0000}myclientid2')
+        callback.clear()
+
+        bclient.disconnect()
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'myclientid')
+        callback.clear()
+
+        bclient.connect(host=host, port=port, cleansession=True)
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'myclientid\\u{0000}myclientid2')
+        callback.clear()
+
+        # test subscription updates
+        aclient.disconnect()
+        aclient.connect(host=host, port=port, cleansession=True)
+        aclient.subscribe(["$sys/subscriptions/myclientid2"], [1])
+
+        bclient.subscribe(["foo"], [1])
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'foo')
+        callback.clear()
+
+        bclient.subscribe(["bar"], [1])
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'bar\\u{0000}foo')
+        callback.clear()
+
+        bclient.unsubscribe(["bar"])
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'foo')
+        callback.clear()
+
+        bclient.disconnect()
+        time.sleep(.5)
+        is_same(callback.messages[0][1], b'')
+        callback.clear()
+
+        aclient.disconnect()
+      except:
+        traceback.print_exc()
+        succeeded = False
+      self.assertEqual(succeeded, True)
+      print("system message tests", "succeeded" if succeeded else "failed")
+      return succeeded
+
 
 if __name__ == "__main__":
   try:
